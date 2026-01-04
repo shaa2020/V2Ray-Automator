@@ -2,8 +2,8 @@ name: Auto V2Ray Update
 
 on:
   schedule:
-    - cron: '0 */4 * * *' # Runs every 4 hours
-  workflow_dispatch:      # Manual Run Button
+    - cron: '*/10 * * * *' # Runs every 10 minutes
+  workflow_dispatch:       # Manual Run Button
 
 jobs:
   build:
