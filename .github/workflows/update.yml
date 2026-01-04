@@ -2,28 +2,37 @@ name: V2Ray Auto Update
 
 on:
   schedule:
-    - cron: '*/10 * * * *' # Every 10 mins
-  workflow_dispatch:
+    - cron: '*/10 * * * *'  # Runs every 10 minutes
+  workflow_dispatch:        # Allows manual run button
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write       # CRITICAL: Allows saving files to your repo
+      
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - run: pip install -r requirements.txt
-      - name: Run Script
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Bot Script
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python main.py
-      - name: Commit
+
+      - name: Commit and Push (Safety Mode)
         run: |
-          git config --global user.name "Bot"
+          git config --global user.name "V2Ray Bot"
           git config --global user.email "bot@github.com"
           git add .
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Update" && git push)
+          # The code below prevents the Red X if there are no changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Auto-update premium servers" && git push)
