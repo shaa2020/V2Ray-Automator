@@ -1,6 +1,5 @@
 import requests
 import base64
-import re
 import socket
 import time
 import os
@@ -9,15 +8,14 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs
 
-# --- SOURCES ---
+# --- CONFIGURATION ---
 SOURCES = [
     "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Splitted-By-Protocol/vless.txt",
     "https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
     "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt"
 ]
 
-# --- SETTINGS ---
-TIMEOUT = 2  # Connection timeout (Seconds)
+TIMEOUT = 1.5  # Lower timeout = Only high quality servers
 MAX_THREADS = 40
 TG_TOKEN = os.getenv("TG_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
@@ -32,15 +30,11 @@ def fetch_links():
             if resp.status_code == 200:
                 content = resp.text.strip()
                 if " " not in content and len(content) > 200:
-                    try:
-                        content = base64.b64decode(content).decode('utf-8', errors='ignore')
+                    try: content = base64.b64decode(content).decode('utf-8', errors='ignore')
                     except: pass
-                
                 for line in content.splitlines():
-                    if line.strip().startswith("vless://"):
-                        links.add(line.strip())
+                    if line.strip().startswith("vless://"): links.add(line.strip())
         except: pass
-    print(f"✅ Found {len(links)} raw links.")
     return list(links)
 
 def check_server(link):
@@ -49,8 +43,6 @@ def check_server(link):
         host = parsed.hostname
         port = parsed.port
         params = parse_qs(parsed.query)
-        
-        # Check SNI/Host Override
         check_host = host
         if 'sni' in params and params['sni'][0]: check_host = params['sni'][0]
         elif 'host' in params and params['host'][0]: check_host = params['host'][0]
@@ -66,76 +58,61 @@ def check_server(link):
         
         if result == 0:
             latency = int((end - start) * 1000)
-            clean_name = f"⚡_Live_{latency}ms"
+            # Categorize by Speed
+            if latency < 200: icon = "🚀"
+            elif latency < 500: icon = "🟢"
+            else: icon = "🟡"
+            
+            clean_name = f"{icon}_Ping_{latency}ms"
             final_link = link.split('#')[0] + "#" + clean_name
             return {"link": final_link, "latency": latency, "name": clean_name}
         return None
     except: return None
 
-def generate_dashboard(valid_servers):
-    valid_servers.sort(key=lambda x: x['latency'])
-    date_str = datetime.now(pytz.utc).strftime("%Y-%m-%d %H:%M UTC")
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>V2Ray Dashboard</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body {{ font-family: sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }}
-            .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 15px; margin-bottom: 15px; }}
-            .status {{ color: #3fb950; font-weight: bold; }}
-            .copy-btn {{ background: #238636; color: white; border: none; padding: 5px 10px; cursor: pointer; }}
-            input {{ background: #0d1117; border: 1px solid #30363d; color: #fff; width: 60%; }}
-        </style>
-    </head>
-    <body>
-        <h1 style="text-align:center; color: #58a6ff;">🚀 Active Servers: {len(valid_servers)}</h1>
-        <p style="text-align:center">Last Update: {date_str}</p>
-    """
-    
-    for i, s in enumerate(valid_servers[:50]): # Show top 50
-        qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={requests.utils.quote(s['link'])}"
-        html += f"""
-        <div class="card">
-            <div style="float:right"><img src="{qr_api}"></div>
-            <h3>{s['name']}</h3>
-            <p>Ping: <span class="status">{s['latency']}ms</span></p>
-            <input type="text" value="{s['link']}" id="link_{i}">
-            <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('link_{i}').value)">Copy</button>
-        </div>
-        """
-    html += "</body></html>"
-    
-    with open("index.html", "w", encoding="utf-8") as f: f.write(html)
-
-def send_telegram(count):
+def send_telegram_premium(valid_servers):
     if not TG_TOKEN or not TG_CHAT_ID: return
-    msg = f"✅ <b>V2Ray Update</b>\n\n⚡ Found {count} working servers.\n🔗 Dashboard updated."
+    
+    # Sort and Count
+    valid_servers.sort(key=lambda x: x['latency'])
+    fast = sum(1 for s in valid_servers if s['latency'] < 200)
+    medium = sum(1 for s in valid_servers if s['latency'] < 500)
+    
+    date_str = datetime.now(pytz.utc).strftime("%H:%M UTC")
+    
+    # 1. Send Beautiful Status Report
+    msg = (
+        f"💎 <b>VIP V2Ray Update</b> ({date_str})\n\n"
+        f"⚡ <b>Total Online:</b> {len(valid_servers)}\n"
+        f"🚀 <b>Ultra Fast:</b> {fast}\n"
+        f"🟢 <b>Stable:</b> {medium}\n\n"
+        f"<i>Full list uploaded below 👇</i>"
+    )
     requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", json={"chat_id": TG_CHAT_ID, "text": msg, "parse_mode": "HTML"})
+
+    # 2. Upload the File Directly (Premium Feature!)
+    # Users can click the file to import instantly
+    file_content = "\n".join([x['link'] for x in valid_servers])
+    files = {'document': ('vless_premium.txt', file_content)}
+    requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendDocument", data={"chat_id": TG_CHAT_ID, "caption": "📂 <b>Import this file directly!</b>", "parse_mode": "HTML"}, files=files)
 
 def main():
     raw = fetch_links()
     if not raw: return
 
-    print(f"🔍 Testing {len(raw)} links...")
     valid = []
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         results = executor.map(check_server, raw)
         for res in results:
             if res: valid.append(res)
-            
-    print(f"🎉 Success! {len(valid)} alive.")
     
+    # Save standard files for GitHub URL
     links = [x['link'] for x in valid]
     with open("vless.txt", "w") as f: f.write("\n".join(links))
-    
     encoded = base64.b64encode("\n".join(links).encode()).decode()
     with open("sub.txt", "w") as f: f.write(encoded)
     
-    generate_dashboard(valid)
-    send_telegram(len(valid))
+    # Trigger Premium Telegram Alert
+    send_telegram_premium(valid)
 
 if __name__ == "__main__":
     main()
