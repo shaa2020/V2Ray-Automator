@@ -1,34 +1,29 @@
-name: Auto V2Ray Update
+name: V2Ray Auto Update
 
 on:
   schedule:
-    - cron: '*/10 * * * *' # Runs every 10 minutes
-  workflow_dispatch:       # Manual Run Button
+    - cron: '*/10 * * * *' # Every 10 mins
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Allows saving files
-      
+      contents: write
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-        
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-          
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
-        
-      - name: Run Bot Script
+      - run: pip install -r requirements.txt
+      - name: Run Script
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python main.py
-        
-      - name: Commit and Push
+      - name: Commit
         run: |
-          git config --global user.name "V2Ray Bot"
+          git config --global user.name "Bot"
           git config --global user.email "bot@github.com"
-          git add vless.txt sub.txt
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Auto-update working servers" && git push)
+          git add .
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Update" && git push)
