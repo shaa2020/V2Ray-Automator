@@ -10,12 +10,15 @@ from urllib.parse import urlparse, parse_qs
 
 # --- CONFIGURATION ---
 SOURCES = [
+    "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
+    "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/trojan",
+    "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/V2RayAggregator",
+    "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
     "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Splitted-By-Protocol/vless.txt",
-    "https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
-    "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt"
+    "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
 ]
 
-TIMEOUT = 1.5  # Stricter timeout for "Premium" quality
+TIMEOUT = 2
 MAX_THREADS = 40
 TG_TOKEN = os.getenv("TG_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
@@ -58,7 +61,6 @@ def check_server(link):
         
         if result == 0:
             latency = int((end - start) * 1000)
-            # Speed Categories
             if latency < 200: icon = "🚀"
             elif latency < 500: icon = "🟢"
             else: icon = "🟡"
@@ -91,7 +93,6 @@ def generate_dashboard(valid_servers):
         <h1 style="text-align:center; color: #2196F3;">💎 Premium Servers: {len(valid_servers)}</h1>
         <p style="text-align:center">Last Update: {date_str}</p>
     """
-    
     for i, s in enumerate(valid_servers[:50]): 
         qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={requests.utils.quote(s['link'])}"
         html += f"""
@@ -114,7 +115,6 @@ def send_telegram_premium(valid_servers):
     
     date_str = datetime.now(pytz.utc).strftime("%H:%M UTC")
     
-    # 1. Send Report
     msg = (
         f"💎 <b>VIP V2Ray Update</b> ({date_str})\n\n"
         f"⚡ <b>Total Online:</b> {len(valid_servers)}\n"
@@ -123,7 +123,6 @@ def send_telegram_premium(valid_servers):
     )
     requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", json={"chat_id": TG_CHAT_ID, "text": msg, "parse_mode": "HTML"})
 
-    # 2. Upload File (The Premium Feature)
     file_content = "\n".join([x['link'] for x in valid_servers])
     files = {'document': ('vless_premium.txt', file_content)}
     requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendDocument", data={"chat_id": TG_CHAT_ID, "caption": "🚀 <b>Premium List</b>"}, files=files)
@@ -138,13 +137,21 @@ def main():
         for res in results:
             if res: valid.append(res)
     
-    # Save standard files
     links = [x['link'] for x in valid]
-    with open("vless.txt", "w") as f: f.write("\n".join(links))
-    encoded = base64.b64encode("\n".join(links).encode()).decode()
-    with open("sub.txt", "w") as f: f.write(encoded)
     
-    # Run Premium Features
+    # --- FORCE UPDATE LOGIC ---
+    # We add a timestamp to the top of vless.txt
+    # This guarantees the file content is different every time
+    current_time = datetime.now(pytz.utc).strftime("%Y-%m-%d %H:%M:%S")
+    header = f"# Last Updated: {current_time} UTC | Servers: {len(valid)}"
+    
+    with open("vless.txt", "w") as f: 
+        f.write(header + "\n" + "\n".join(links))
+        
+    encoded = base64.b64encode("\n".join(links).encode()).decode()
+    with open("sub.txt", "w") as f: 
+        f.write(encoded)
+    
     generate_dashboard(valid)
     send_telegram_premium(valid)
 
