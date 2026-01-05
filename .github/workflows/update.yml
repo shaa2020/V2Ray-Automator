@@ -2,14 +2,14 @@ name: V2Ray Auto Update
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Runs every 10 minutes
-  workflow_dispatch:        # Allows manual run button
+    - cron: '*/10 * * * *' # Every 10 mins
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write       # CRITICAL: Allows saving files to your repo
+      contents: write # REQUIRED to save files
       
     steps:
       - name: Checkout Code
@@ -29,10 +29,16 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python main.py
 
-      - name: Commit and Push (Safety Mode)
+      - name: Force Commit and Push
         run: |
           git config --global user.name "V2Ray Bot"
           git config --global user.email "bot@github.com"
-          git add .
-          # The code below prevents the Red X if there are no changes
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🚀 Auto-update premium servers" && git push)
+          
+          # Force add ALL files
+          git add -A
+          
+          # Commit with a timestamp in the message so history looks active
+          git commit -m "🚀 Update $(date)"
+          
+          # Push specifically to the main branch
+          git push origin HEAD:main
